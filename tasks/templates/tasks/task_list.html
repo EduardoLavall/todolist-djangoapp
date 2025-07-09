@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Task List</title>
+</head>
+<body>
+    <h1>Task List</h1>
+    
+    {% if tasks %}
+        <ul>
+        {% for task in tasks %}
+            <li>
+                <strong>{{ task.title }}</strong><br>
+                Due Date: {{ task.due_date }}<br>
+                Priority: {{ task.priority }}<br>
+                Completed: {{ task.is_completed|yesno:"Yes,No" }}
+            </li>
+        {% endfor %}
+        </ul>
+    {% else %}
+        <p>No tasks available.</p>
+    {% endif %}
+</body>
+</html> 
