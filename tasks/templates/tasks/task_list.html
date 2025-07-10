@@ -1,24 +1,129 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Task List</title>
-</head>
-<body>
-    <h1>Task List</h1>
-    
-    {% if tasks %}
-        <ul>
-        {% for task in tasks %}
-            <li>
-                <strong>{{ task.title }}</strong><br>
-                Due Date: {{ task.due_date }}<br>
-                Priority: {{ task.priority }}<br>
-                Completed: {{ task.is_completed|yesno:"Yes,No" }}
-            </li>
-        {% endfor %}
-        </ul>
-    {% else %}
-        <p>No tasks available.</p>
-    {% endif %}
-</body>
-</html> 
+{% extends 'tasks/base.html' %}
+{% load static %}
+
+{% block title %}Task List{% endblock %}
+
+{% block content %}
+<h1>Task List</h1>
+
+<div class="page-controls">
+    <div class="sort-controls">
+        <label for="sort-dropdown">Sort by:</label>
+        <div class="custom-dropdown">
+            <select id="sort-dropdown" class="sort-select">
+                <option value="due_date" {% if request.GET.sort == 'due_date' or not request.GET.sort %}selected{% endif %}>Due Date</option>
+                <option value="priority" {% if request.GET.sort == 'priority' %}selected{% endif %}>Priority</option>
+                <option value="status" {% if request.GET.sort == 'status' %}selected{% endif %}>Status</option>
+            </select>
+            <span class="dropdown-arrow">⬍</span>
+        </div>
+    </div>
+</div>
+
+<div class="floating-add-button">
+    <a href="{% url 'create_task' %}" class="add-task-btn">
+        <span class="add-icon">+</span>
+        <span class="add-text">Add Task</span>
+    </a>
+</div>
+
+{% if tasks %}
+    <div class="table-container">
+        <table class="task-table">
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Due Date</th>
+                    <th>Priority</th>
+                    <th>Status</th>
+                    <th>Completed</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for task in tasks %}
+                <tr class="task-row" id="task-{{ task.id }}" style="background-color:
+                    {% if task.status == 'completed' %}#97F5E9
+                    {% elif task.status == 'ongoing' %}#F2F3DB
+                    {% endif %}
+                ">
+                    <td>
+                        <div class="display-mode" id="display-{{ task.id }}">
+                            <strong>{{ task.title }}</strong>
+                        </div>
+                        <div class="edit-form" id="edit-{{ task.id }}">
+                            <input type="text" name="title" id="title-{{ task.id }}" value="{{ task.title }}" maxlength="200" required>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="display-mode" id="display-date-{{ task.id }}">
+                            {{ task.due_date }}
+                        </div>
+                        <div class="edit-form" id="edit-date-{{ task.id }}">
+                            <input type="date" name="due_date" id="due_date-{{ task.id }}" value="{{ task.due_date|date:'Y-m-d' }}" required>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="display-mode" id="display-priority-{{ task.id }}">
+                            {% if task.priority == 'high' %}🔴{% elif task.priority == 'medium' %}🟡{% else %}🟢{% endif %} {{ task.priority|title }}
+                        </div>
+                        <div class="edit-form" id="edit-priority-{{ task.id }}">
+                            <select name="priority" id="priority-{{ task.id }}" required>
+                                <option value="high" {% if task.priority == 'high' %}selected{% endif %}>🔴 High</option>
+                                <option value="medium" {% if task.priority == 'medium' %}selected{% endif %}>🟡 Medium</option>
+                                <option value="low" {% if task.priority == 'low' %}selected{% endif %}>🟢 Low</option>
+                            </select>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="display-mode" id="display-status-{{ task.id }}">
+                            {{ task.status|title }}
+                        </div>
+                        <div class="edit-form" id="edit-status-{{ task.id }}">
+                            <select name="status" id="status-{{ task.id }}" required>
+                                <option value="ongoing" {% if task.status == 'ongoing' %}selected{% endif %}>Ongoing</option>
+                                <option value="completed" {% if task.status == 'completed' %}selected{% endif %}>Completed</option>
+                            </select>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="display-mode" id="display-completed-{{ task.id }}">
+                            <form method="post" class="completion-form">
+                                {% csrf_token %}
+                                <input type="hidden" name="task_id" value="{{ task.id }}">
+                                <input type="hidden" name="action" value="toggle_completion">
+                                <input type="checkbox" 
+                                       name="is_completed" 
+                                       value="1" 
+                                       {% if task.is_completed %}checked{% endif %}
+                                       onchange="this.form.submit()"
+                                       class="completion-checkbox">
+                            </form>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="display-mode" id="display-actions-{{ task.id }}">
+                            <button onclick="startEdit({{ task.id }})" class="edit-task-btn">
+                                <span class="edit-icon">✏️</span>
+                                <span class="edit-text">Edit</span>
+                            </button>
+                        </div>
+                        <div class="edit-form" id="edit-actions-{{ task.id }}">
+                            <form method="post" id="form-{{ task.id }}" class="inline-form">
+                                {% csrf_token %}
+                                <input type="hidden" name="task_id" value="{{ task.id }}">
+                                <input type="hidden" name="description" id="description-{{ task.id }}" value="{{ task.description }}">
+                                <button type="submit" class="save-btn">💾 Save</button>
+                                <button type="button" onclick="cancelEdit({{ task.id }})" class="cancel-btn">❌ Cancel</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% else %}
+    <p>No tasks available.</p>
+{% endif %}
+{% endblock %} 
