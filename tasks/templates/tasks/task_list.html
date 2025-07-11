@@ -7,13 +7,30 @@
 <h1>Task List</h1>
 
 <div class="page-controls">
+    <div class="filter-controls">
+        <label>Filter by status:</label>
+        <div class="filter-buttons">
+            <a href="{% url 'task_list' %}{% if current_sort %}?sort={{ current_sort }}{% endif %}" 
+               class="filter-btn {% if not current_status_filter %}active{% endif %}">
+                All Tasks
+            </a>
+            <a href="{% url 'task_list' %}?status=ongoing{% if current_sort %}&sort={{ current_sort }}{% endif %}" 
+               class="filter-btn {% if current_status_filter == 'ongoing' %}active{% endif %}">
+                Ongoing
+            </a>
+            <a href="{% url 'task_list' %}?status=completed{% if current_sort %}&sort={{ current_sort }}{% endif %}" 
+               class="filter-btn {% if current_status_filter == 'completed' %}active{% endif %}">
+                Completed
+            </a>
+        </div>
+    </div>
     <div class="sort-controls">
         <label for="sort-dropdown">Sort by:</label>
         <div class="custom-dropdown">
             <select id="sort-dropdown" class="sort-select">
-                <option value="due_date" {% if request.GET.sort == 'due_date' or not request.GET.sort %}selected{% endif %}>Due Date</option>
-                <option value="priority" {% if request.GET.sort == 'priority' %}selected{% endif %}>Priority</option>
-                <option value="status" {% if request.GET.sort == 'status' %}selected{% endif %}>Status</option>
+                <option value="due_date" {% if current_sort == 'due_date' or not current_sort %}selected{% endif %}>Due Date</option>
+                <option value="priority" {% if current_sort == 'priority' %}selected{% endif %}>Priority</option>
+                <option value="status" {% if current_sort == 'status' %}selected{% endif %}>Status</option>
             </select>
             <span class="dropdown-arrow">⬍</span>
         </div>
@@ -21,10 +38,10 @@
 </div>
 
 <div class="floating-add-button">
-    <a href="{% url 'create_task' %}" class="add-task-btn">
+    <button class="add-task-btn" onclick="openAddTaskModal()">
         <span class="add-icon">+</span>
         <span class="add-text">Add Task</span>
-    </a>
+    </button>
 </div>
 
 {% if tasks %}
@@ -34,6 +51,7 @@
                 <tr>
                     <th class="completed-header" style="width:48px; padding-right:0;">&nbsp;</th>
                     <th>Title</th>
+                    <th>Description</th>
                     <th>Due Date</th>
                     <th>Priority</th>
                     <th>Status</th>
@@ -52,6 +70,12 @@
                             {% csrf_token %}
                             <input type="hidden" name="task_id" value="{{ task.id }}">
                             <input type="hidden" name="action" value="toggle_completion">
+                            {% if current_status_filter %}
+                            <input type="hidden" name="status" value="{{ current_status_filter }}">
+                            {% endif %}
+                            {% if current_sort %}
+                            <input type="hidden" name="sort" value="{{ current_sort }}">
+                            {% endif %}
                             <input type="checkbox" class="rounded-checkbox" name="is_completed" value="1" {% if task.is_completed %}checked{% endif %} onchange="this.form.submit()" aria-label="Toggle completed">
                         </form>
                     </td>
@@ -59,54 +83,32 @@
                         <div class="display-mode" id="display-{{ task.id }}">
                             <strong>{{ task.title }}</strong>
                         </div>
-                        <div class="edit-form" id="edit-{{ task.id }}">
-                            <input type="text" name="title" id="title-{{ task.id }}" value="{{ task.title }}" maxlength="200" required>
+                    </td>
+                    <td>
+                        <div class="display-mode" id="display-desc-{{ task.id }}">
+                            {% if task.description %}{{ task.description }}{% else %}&ndash;{% endif %}
                         </div>
                     </td>
                     <td>
                         <div class="display-mode" id="display-date-{{ task.id }}">
                             {{ task.due_date }}
                         </div>
-                        <div class="edit-form" id="edit-date-{{ task.id }}">
-                            <input type="date" name="due_date" id="due_date-{{ task.id }}" value="{{ task.due_date|date:'Y-m-d' }}" required>
-                        </div>
                     </td>
                     <td>
                         <div class="display-mode" id="display-priority-{{ task.id }}">
                             {% if task.priority == 'high' %}🔴{% elif task.priority == 'medium' %}🟡{% else %}🟢{% endif %} {{ task.priority|title }}
-                        </div>
-                        <div class="edit-form" id="edit-priority-{{ task.id }}">
-                            <select name="priority" id="priority-{{ task.id }}" required>
-                                <option value="high" {% if task.priority == 'high' %}selected{% endif %}>🔴 High</option>
-                                <option value="medium" {% if task.priority == 'medium' %}selected{% endif %}>🟡 Medium</option>
-                                <option value="low" {% if task.priority == 'low' %}selected{% endif %}>🟢 Low</option>
-                            </select>
                         </div>
                     </td>
                     <td>
                         <div class="display-mode" id="display-status-{{ task.id }}">
                             {{ task.status|title }}
                         </div>
-                        <div class="edit-form" id="edit-status-{{ task.id }}">
-                            <select name="status" id="status-{{ task.id }}" required>
-                                <option value="ongoing" {% if task.status == 'ongoing' %}selected{% endif %}>Ongoing</option>
-                                <option value="completed" {% if task.status == 'completed' %}selected{% endif %}>Completed</option>
-                            </select>
-                        </div>
                     </td>
                     <td class="actions-cell">
                         <div class="display-mode" id="display-actions-{{ task.id }}" style="display: flex; align-items: center; gap: 12px;">
-                            <span class="action-icon edit-action" title="Edit" onclick="startEdit({{ task.id }})">✎</span>
+                            <span class="action-icon edit-action" title="Edit"
+                                  onclick="openEditTaskModal({{ task.id }}, '{{ task.title|escapejs }}', '{{ task.description|escapejs }}', '{{ task.due_date|date:'Y-m-d' }}', '{{ task.priority }}')">✎</span>
                             <span class="action-icon delete-action" title="Delete" onclick="openDeleteModal(event, {{ task.id }}, '{{ task.title|escapejs }}', this)">🗑</span>
-                        </div>
-                        <div class="edit-form" id="edit-actions-{{ task.id }}">
-                            <form method="post" id="form-{{ task.id }}" class="inline-form">
-                                {% csrf_token %}
-                                <input type="hidden" name="task_id" value="{{ task.id }}">
-                                <input type="hidden" name="description" id="description-{{ task.id }}" value="{{ task.description }}">
-                                <button type="submit" class="save-btn">💾 Save</button>
-                                <button type="button" onclick="cancelEdit({{ task.id }})" class="cancel-btn">❌ Cancel</button>
-                            </form>
                         </div>
                     </td>
                 </tr>
@@ -120,6 +122,154 @@
 {% endblock %}
 
 {% block modal %}
+<div id="addTaskModal" class="modal">
+  <div class="modal-content">
+    <form method="post" action="{% url 'create_task' %}" id="addTaskForm">
+      {% csrf_token %}
+      <h2 class="modal-title">Add New Task</h2>
+
+      <div class="modal-field">
+        <label for="title">Title</label>
+        <input type="text" name="title" placeholder="e.g., Finish Django Project" value="{{ form.title.value|default_if_none:'' }}" required>
+        {% if form.title.errors %}
+          <div class="form-error">{{ form.title.errors.0 }}</div>
+        {% endif %}
+      </div>
+
+      <div class="modal-field">
+        <label for="description">Description</label>
+        <textarea name="description" placeholder="Add more details here...">{{ form.description.value|default_if_none:'' }}</textarea>
+        {% if form.description.errors %}
+          <div class="form-error">{{ form.description.errors.0 }}</div>
+        {% endif %}
+      </div>
+
+      <div class="modal-field">
+        <label for="due_date">Due Date</label>
+        <input type="date" name="due_date" value="{{ form.due_date.value|default_if_none:'' }}" required>
+        {% if form.due_date.errors %}
+          <div class="form-error">{{ form.due_date.errors.0 }}</div>
+        {% endif %}
+      </div>
+
+      <div class="modal-field">
+        <label for="priority">Priority</label>
+        <select name="priority" required>
+          <option value="" disabled {% if not form.priority.value %}selected{% endif %}>Select priority</option>
+          <option value="high" {% if form.priority.value == 'high' %}selected{% endif %}>🔴 High</option>
+          <option value="medium" {% if form.priority.value == 'medium' %}selected{% endif %}>🟡 Medium</option>
+          <option value="low" {% if form.priority.value == 'low' %}selected{% endif %}>🟢 Low</option>
+        </select>
+        {% if form.priority.errors %}
+          <div class="form-error">{{ form.priority.errors.0 }}</div>
+        {% endif %}
+      </div>
+
+      <!-- Status is always 'ongoing' for new tasks -->
+      <input type="hidden" name="status" value="ongoing">
+
+      <div class="modal-buttons">
+        <button type="submit" class="btn btn-primary">Create</button>
+        <button type="button" class="btn btn-secondary" onclick="closeAddTaskModal()">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+{{ block.super }}
+<script>
+function openAddTaskModal() {
+  document.getElementById('addTaskModal').style.display = 'flex';
+}
+function closeAddTaskModal() {
+  document.getElementById('addTaskModal').style.display = 'none';
+  document.getElementById('addTaskForm').reset();
+}
+document.addEventListener('DOMContentLoaded', function() {
+  {% if show_modal %}
+    openAddTaskModal();
+  {% else %}
+    document.getElementById('addTaskModal').style.display = 'none';
+  {% endif %}
+});
+</script>
+<style>
+.form-error {
+  color: #dc3545;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+/* Filter controls styling */
+.filter-controls {
+  margin-bottom: 16px;
+}
+
+.filter-controls label {
+  display: block;
+  font-weight: 500;
+  margin-bottom: 8px;
+  color: #333;
+}
+
+.filter-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filter-btn {
+  display: inline-block;
+  padding: 8px 16px;
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  color: #495057;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.filter-btn:hover {
+  background-color: #e9ecef;
+  border-color: #adb5bd;
+  color: #212529;
+  text-decoration: none;
+}
+
+.filter-btn.active {
+  background-color: #007bff;
+  border-color: #007bff;
+  color: white;
+}
+
+.filter-btn.active:hover {
+  background-color: #0056b3;
+  border-color: #0056b3;
+  color: white;
+}
+
+/* Adjust page controls layout */
+.page-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+@media (min-width: 768px) {
+  .page-controls {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+  
+  .filter-controls {
+    margin-bottom: 0;
+  }
+}
+</style>
 <div id="deleteModal" class="modal">
   <div class="modal-content">
     <p>Are you sure you want to delete this task?</p>
@@ -129,5 +279,73 @@
     <button id="cancelDeleteBtn" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
   </div>
 </div>
+<div id="editTaskModal" class="modal">
+  <div class="modal-content">
+    <form method="post" action="{% url 'task_list' %}" id="editTaskForm">
+      {% csrf_token %}
+      <input type="hidden" name="task_id" id="edit-task-id">
+      <input type="hidden" name="status" value="ongoing">
+      {% if current_status_filter %}
+      <input type="hidden" name="filter_status" value="{{ current_status_filter }}">
+      {% endif %}
+      {% if current_sort %}
+      <input type="hidden" name="filter_sort" value="{{ current_sort }}">
+      {% endif %}
+      <h2 class="modal-title">Edit Task</h2>
+      <div class="modal-field">
+        <label for="edit-title">Title</label>
+        <input type="text" name="title" id="edit-title" required>
+      </div>
+      <div class="modal-field">
+        <label for="edit-description">Description</label>
+        <textarea name="description" id="edit-description"></textarea>
+      </div>
+      <div class="modal-field">
+        <label for="edit-due-date">Due Date</label>
+        <input type="date" name="due_date" id="edit-due-date" required>
+      </div>
+      <div class="modal-field">
+        <label for="edit-priority">Priority</label>
+        <select name="priority" id="edit-priority" required>
+          <option value="" disabled>Select priority</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+      </div>
+      <div class="modal-buttons">
+        <button type="submit" class="btn btn-primary">Save</button>
+        <button type="button" class="btn btn-secondary" onclick="closeEditTaskModal()">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openEditTaskModal(id, title, description, due_date, priority) {
+  document.getElementById('edit-task-id').value = id;
+  document.getElementById('edit-title').value = title;
+  document.getElementById('edit-description').value = description;
+  document.getElementById('edit-due-date').value = due_date;
+  document.getElementById('edit-priority').value = priority;
+  document.getElementById('editTaskModal').style.display = 'flex';
+}
+function closeEditTaskModal() {
+  document.getElementById('editTaskModal').style.display = 'none';
+  document.getElementById('editTaskForm').reset();
+}
+
+// Handle sort dropdown changes while preserving current filter
+document.addEventListener('DOMContentLoaded', function() {
+  const sortDropdown = document.getElementById('sort-dropdown');
+  if (sortDropdown) {
+    sortDropdown.addEventListener('change', function() {
+      const currentUrl = new URL(window.location);
+      currentUrl.searchParams.set('sort', this.value);
+      window.location.href = currentUrl.toString();
+    });
+  }
+});
+</script>
 {% endblock %}
 <script src="{% static 'js/delete_modal.js' %}"></script> 
