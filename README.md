@@ -1,30 +1,84 @@
-# 📝 Django To-Do List App
+# 📝 Django To-Do App
 
-This is a simple and functional **To-Do List web application** built with **Django**, designed as part of a technical test for a psychologist's software project. The app allows users to manage their daily tasks with features like priorities, due dates, and completion tracking.
-
----
-
-## 🚀 Features
-
-- 🧾 Create, edit, and delete tasks
-- 📆 Set a due date for each task
-- ⚠️ Set task priority: High 🔴, Medium 🟡, Low 🟢
-- ✅ Mark tasks as complete
-- 📄 View completed tasks on a separate page
-- 🏠 Homepage shows all active tasks ordered by due date and priority
-- 🔄 Bonus (in progress): AJAX for dynamic task handling
-- 👥 Bonus (in progress): Multiple task lists and user sharing
+A clean and responsive to-do list application built with Django and Bootstrap.  
+It allows users to create, edit, delete, and filter tasks using intuitive modal interfaces — no clutter, just productivity.
 
 ---
 
-## 🧠 Technologies Used
+## 🚀 Features Implemented
 
-- 🐍 Python 3.x
-- 🌐 Django
-- 💾 SQLite (for development)
-- 🎨 Bootstrap (for styling, coming soon)
-- 🧩 Django Forms and Templates
+### ✅ Core Functionality
+
+- **Task Model**  
+  Each task has a:
+  - `Title` (required)
+  - `Description` (optional)
+  - `Due Date` (required)
+  - `Priority` (High, Medium, Low)
+  - `Status` (defaults to Ongoing)
+
+- **Task List Homepage**  
+  - Displays all tasks in a table, sorted by due date (default).
+  - Includes a sort dropdown to order by:  
+    🔹 Due Date  
+    🔹 Priority  
+    🔹 Status  
+
+- **Create New Task**  
+  - Modal opens on clicking "Add Task" button.  
+  - Fields are validated inline.  
+  - Errors are shown without leaving the page.
+  - Default status is automatically set to **Ongoing**.
+  - Tasks are color-coded by priority.
+
+- **Edit Task**  
+  - Opens a modal pre-filled with task data.
+  - Allows editing title, description, due date, priority, and status.
+  - Errors are shown inline in the modal.
+
+- **Delete Task**  
+  - Opens a confirmation modal.
+  - One-click delete with cancel option.
+
+- **Mark as Completed**  
+  - Checkbox toggle next to each task.
+  - Updates the `status` and visually refreshes the task row.
+
+- **Filter by Status**  
+  - Option to filter tasks on the homepage by:
+    - ✅ All Tasks
+    - 🕐 Ongoing
+    - ✔️ Completed
+
+- **Priority Colors**  
+  - 🔴 High = Red background  
+  - 🟡 Medium = Yellow-ish background  
+  - 🟢 Low = Green-ish background
+
+- **Bootstrap Theme & Styling**  
+  - All modals, buttons, and inputs follow a consistent, minimal Bootstrap aesthetic.
+  - Fonts and colors are inspired by [psiris.co](https://psiris.co) for a clean and modern vibe.
 
 ---
 
-## 📂 Project Structure (simplified)
+## 🛠️ Upcoming Features
+
+These are planned for future commits:
+
+- ⚡ **AJAX Integration**  
+  Add/delete/edit tasks without full page reload.
+
+- 📋 **Multiple Task Lists**  
+  Allow users to manage more than one list.
+
+---
+
+## 🧪 Tech Stack
+
+- **Python 3.10+**
+- **Django 4.x**
+- **SQLite** (default, no setup needed)
+- **Bootstrap 5**
+- **HTML + CSS + JS (Vanilla)**
+
+---
