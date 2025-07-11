@@ -32,12 +32,12 @@
         <table class="task-table">
             <thead>
                 <tr>
+                    <th class="completed-header" style="width:48px; padding-right:0;">&nbsp;</th>
                     <th>Title</th>
                     <th>Due Date</th>
                     <th>Priority</th>
                     <th>Status</th>
-                    <th>Completed</th>
-                    <th>Actions</th>
+                    <th class="actions-header" style="width:70px;">&nbsp;</th>
                 </tr>
             </thead>
             <tbody>
@@ -47,6 +47,14 @@
                     {% elif task.status == 'ongoing' %}#F2F3DB
                     {% endif %}
                 ">
+                    <td class="completed-cell">
+                        <form method="post" class="completion-form">
+                            {% csrf_token %}
+                            <input type="hidden" name="task_id" value="{{ task.id }}">
+                            <input type="hidden" name="action" value="toggle_completion">
+                            <input type="checkbox" class="rounded-checkbox" name="is_completed" value="1" {% if task.is_completed %}checked{% endif %} onchange="this.form.submit()" aria-label="Toggle completed">
+                        </form>
+                    </td>
                     <td>
                         <div class="display-mode" id="display-{{ task.id }}">
                             <strong>{{ task.title }}</strong>
@@ -86,27 +94,10 @@
                             </select>
                         </div>
                     </td>
-                    <td>
-                        <div class="display-mode" id="display-completed-{{ task.id }}">
-                            <form method="post" class="completion-form">
-                                {% csrf_token %}
-                                <input type="hidden" name="task_id" value="{{ task.id }}">
-                                <input type="hidden" name="action" value="toggle_completion">
-                                <input type="checkbox" 
-                                       name="is_completed" 
-                                       value="1" 
-                                       {% if task.is_completed %}checked{% endif %}
-                                       onchange="this.form.submit()"
-                                       class="completion-checkbox">
-                            </form>
-                        </div>
-                    </td>
-                    <td>
-                        <div class="display-mode" id="display-actions-{{ task.id }}">
-                            <button onclick="startEdit({{ task.id }})" class="edit-task-btn">
-                                <span class="edit-icon">✏️</span>
-                                <span class="edit-text">Edit</span>
-                            </button>
+                    <td class="actions-cell">
+                        <div class="display-mode" id="display-actions-{{ task.id }}" style="display: flex; align-items: center; gap: 12px;">
+                            <span class="action-icon edit-action" title="Edit" onclick="startEdit({{ task.id }})">✎</span>
+                            <span class="action-icon delete-action" title="Delete" onclick="openDeleteModal(event, {{ task.id }}, '{{ task.title|escapejs }}', this)">🗑</span>
                         </div>
                         <div class="edit-form" id="edit-actions-{{ task.id }}">
                             <form method="post" id="form-{{ task.id }}" class="inline-form">
@@ -126,4 +117,17 @@
 {% else %}
     <p>No tasks available.</p>
 {% endif %}
-{% endblock %} 
+{% endblock %}
+
+{% block modal %}
+<div id="deleteModal" class="modal">
+  <div class="modal-content">
+    <p>Are you sure you want to delete this task?</p>
+    <div id="deleteTaskTitle" style="font-weight: bold; margin-bottom: 16px;"></div>
+    <input type="hidden" id="deleteTaskId" value="">
+    <button id="confirmDeleteBtn" class="btn btn-danger">Delete</button>
+    <button id="cancelDeleteBtn" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+  </div>
+</div>
+{% endblock %}
+<script src="{% static 'js/delete_modal.js' %}"></script> 
