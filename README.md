@@ -50,6 +50,9 @@ It allows users to create, edit, delete, and filter tasks using intuitive modal 
     - 🕐 Ongoing
     - ✔️ Completed
 
+- ⚡ **AJAX Integration**  
+  Add/delete/edit tasks without full page reload.
+
 - **Priority Colors**  
   - 🔴 High = Red background  
   - 🟡 Medium = Yellow-ish background  
@@ -64,9 +67,6 @@ It allows users to create, edit, delete, and filter tasks using intuitive modal 
 ## 🛠️ Upcoming Features
 
 These are planned for future commits:
-
-- ⚡ **AJAX Integration**  
-  Add/delete/edit tasks without full page reload.
 
 - 📋 **Multiple Task Lists**  
   Allow users to manage more than one list.
