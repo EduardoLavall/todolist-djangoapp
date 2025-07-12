@@ -24,7 +24,7 @@ class Task(models.Model):
     # 📝 Task details: title, description, due date, priority, status, and completion status
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True)
-    due_date = models.DateField()
+    due_date = models.DateTimeField()
     priority = models.CharField(max_length=6, choices=PRIORITY_CHOICES)
     status = models.CharField(max_length=12, choices=STATUS_CHOICES, default=ONGOING)
     is_completed = models.BooleanField(default=False)
