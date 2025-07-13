@@ -1,11 +1,30 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.db.models import Case, When, IntegerField, Value
 from django.http import JsonResponse
+from django.contrib import messages
 from .models import Task
-from .forms import TaskForm
+from .forms import TaskForm, UserRegistrationForm
+from django.contrib.auth.models import User
+from django.contrib.auth.decorators import login_required
 
 # Create your views here.
 
+def register(request):
+    if request.user.is_authenticated:
+        return redirect('task_list')
+    
+    if request.method == 'POST':
+        form = UserRegistrationForm(request.POST)
+        if form.is_valid():
+            user = form.save()
+            messages.success(request, '🎉 Account created successfully! Please log in with your new credentials.')
+            return redirect('login')
+    else:
+        form = UserRegistrationForm()
+    
+    return render(request, 'registration/register.html', {'form': form})
+
+@login_required
 def task_list(request):
     if request.method == 'POST':
         action = request.POST.get('action')
@@ -13,7 +32,7 @@ def task_list(request):
         if action == 'toggle_completion':
             # Handle checkbox toggle
             task_id = request.POST.get('task_id')
-            task = get_object_or_404(Task, id=task_id)
+            task = get_object_or_404(Task, id=task_id, user=request.user)
             is_completed = request.POST.get('is_completed') == '1'
             
             try:
@@ -51,7 +70,7 @@ def task_list(request):
         else:
             # Handle inline editing
             task_id = request.POST.get('task_id')
-            task = get_object_or_404(Task, id=task_id)
+            task = get_object_or_404(Task, id=task_id, user=request.user)
             form = TaskForm(request.POST, instance=task)
             if form.is_valid():
                 task = form.save()
@@ -115,8 +134,8 @@ def task_list(request):
     status_filter = request.GET.get('status', 'ongoing')  # Default to 'ongoing' instead of empty string
     sort_by = request.GET.get('sort', 'due_date')
     
-    # Start with all tasks
-    tasks = Task.objects.all()
+    # Start with tasks for the current user
+    tasks = Task.objects.filter(user=request.user)
     
     # Apply status filter if specified
     if status_filter == 'completed':
@@ -124,7 +143,7 @@ def task_list(request):
     elif status_filter == 'ongoing':
         tasks = tasks.filter(status='ongoing')
     elif status_filter == 'all':
-        # Show all tasks (no filter applied)
+        # Show all tasks for the current user (no status filter applied)
         pass
     # If status_filter is 'ongoing' (default), filter for ongoing tasks
     # If status_filter is empty or invalid, show all tasks (fallback)
@@ -189,11 +208,16 @@ def get_tasks_json(tasks):
         })
     return tasks_data
 
+@login_required
 def create_task(request):
     if request.method == 'POST':
         form = TaskForm(request.POST)
         if form.is_valid():
-            task = form.save()
+            # Create task but don't save yet
+            task = form.save(commit=False)
+            # Assign the task to the current user
+            task.user = request.user
+            task.save()
             
             # Check if this is an AJAX request
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
@@ -232,8 +256,8 @@ def create_task(request):
                 sort_by = request.GET.get('sort', 'due_date')
                 status_filter = request.GET.get('status', '')
                 
-                # Start with all tasks
-                tasks = Task.objects.all()
+                # Start with tasks for the current user
+                tasks = Task.objects.filter(user=request.user)
                 
                 # Apply status filter if specified
                 if status_filter == 'completed':
@@ -272,8 +296,9 @@ def create_task(request):
     # Always redirect to task list for GET requests
     return redirect('task_list')
 
+@login_required
 def delete_task(request, pk):
-    task = get_object_or_404(Task, pk=pk)
+    task = get_object_or_404(Task, pk=pk, user=request.user)
     if request.method == 'POST':
         try:
             task.delete()
