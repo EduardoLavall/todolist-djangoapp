@@ -6,19 +6,54 @@
 {% block content %}
     <h1>Task List</h1>
 
+    {% if no_lists %}
+      <div class="alert alert-info mt-4">You have no task lists yet. <a href="{% url 'create_tasklist' %}" class="btn btn-sm btn-primary ms-2">Create your first list</a></div>
+    {% else %}
+
+    {% if list_error %}
+      <div class="alert alert-danger">{{ list_error }}</div>
+    {% endif %}
+
+    <div class="d-flex align-items-center mb-3">
+      <h3 class="me-3">Tasks in: <span class="text-primary">{{ current_tasklist.name }}{% if current_tasklist.user != request.user %} <span style='color:#888;font-size:90%;'>(Shared)</span>{% endif %}</span></h3>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div class="dropdown">
+          <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="tasklistDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+            Switch List
+          </button>
+          <ul class="dropdown-menu" aria-labelledby="tasklistDropdown">
+            {% for tl in user_tasklists %}
+              <li>
+                <a class="dropdown-item {% if current_tasklist and tl.id == current_tasklist.id %}active{% endif %}" href="/?list={{ tl.id }}">
+                  {{ tl.name }}{% if tl.user != request.user %} <span style="color:#888;font-size:90%">(Shared)</span>{% endif %}
+                </a>
+              </li>
+            {% endfor %}
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item text-success" href="{% url 'create_tasklist' %}">+ Create New List</a></li>
+          </ul>
+        </div>
+        {% if current_tasklist.user == request.user %}
+        <button class="btn btn-outline-primary ms-2" id="openShareModalBtn" type="button">Share List</button>
+        {% endif %}
+      </div>
+    </div>
+    <!-- Hidden element to store current tasklist ID for JavaScript -->
+    <div data-current-tasklist-id="{{ current_tasklist.id }}" style="display: none;"></div>
+
 <div class="page-controls">
     <div class="filter-controls">
         <label>Filter by status:</label>
         <div class="filter-buttons">
-            <a href="{% url 'task_list' %}?status=ongoing{% if current_sort %}&sort={{ current_sort }}{% endif %}" 
+            <a href="{% url 'task_list' %}?list={{ current_tasklist.id }}&status=ongoing{% if current_sort %}&sort={{ current_sort }}{% endif %}" 
                class="filter-btn {% if current_status_filter == 'ongoing' or not current_status_filter %}active{% endif %}">
                 Ongoing
             </a>
-            <a href="{% url 'task_list' %}?status=completed{% if current_sort %}&sort={{ current_sort }}{% endif %}" 
+            <a href="{% url 'task_list' %}?list={{ current_tasklist.id }}&status=completed{% if current_sort %}&sort={{ current_sort }}{% endif %}" 
                class="filter-btn {% if current_status_filter == 'completed' %}active{% endif %}">
                 Completed
             </a>
-            <a href="{% url 'task_list' %}?status=all{% if current_sort %}&sort={{ current_sort }}{% endif %}" 
+            <a href="{% url 'task_list' %}?list={{ current_tasklist.id }}&status=all{% if current_sort %}&sort={{ current_sort }}{% endif %}" 
                class="filter-btn {% if current_status_filter == 'all' %}active{% endif %}">
                 All Tasks
             </a>
@@ -35,10 +70,7 @@
             <span class="dropdown-arrow">⬍</span>
         </div>
     </div>
-</div>
-
-<div class="floating-add-button">
-    <button class="add-task-btn" onclick="openAddTaskModal()">
+    <button class="add-task-btn" id="addTaskBtn">
         <span class="add-icon">+</span>
         <span class="add-text">Add Task</span>
     </button>
@@ -106,9 +138,8 @@
                     </td>
                     <td class="actions-cell">
                         <div class="display-mode" id="display-actions-{{ task.id }}" style="display: flex; align-items: center; gap: 12px;">
-                            <span class="action-icon edit-action" title="Edit"
-                                  onclick="openEditTaskModal({{ task.id }}, '{{ task.title|escapejs }}', '{{ task.description|escapejs }}', '{{ task.due_date|date:'Y-m-d\\TH:i' }}', '{{ task.priority }}')">✎</span>
-                            <span class="action-icon delete-action" title="Delete" onclick="openDeleteModal(event, {{ task.id }}, '{{ task.title|escapejs }}', this)">🗑</span>
+                            <span class="action-icon edit-action" title="Edit" data-task-id="{{ task.id }}" data-task-title="{{ task.title|escapejs }}" data-task-description="{{ task.description|escapejs }}" data-task-due-date="{{ task.due_date|date:'Y-m-d\\TH:i' }}" data-task-priority="{{ task.priority }}" data-task-tasklist="{{ task.tasklist.id }}">✎</span>
+                            <span class="action-icon delete-action" title="Delete" data-task-id="{{ task.id }}" data-task-title="{{ task.title|escapejs }}">🗑</span>
                         </div>
                     </td>
                 </tr>
@@ -118,6 +149,7 @@
     </div>
     {% else %}
         <p>No tasks available.</p>
+    {% endif %}
     {% endif %}
 {% endblock %}
 
@@ -165,679 +197,54 @@
         {% endif %}
       </div>
 
+      <div class="modal-field">
+        <label for="tasklist">Task List</label>
+        {{ form.tasklist }}
+        {% if form.tasklist.errors %}
+          <div class="form-error">{{ form.tasklist.errors.0 }}</div>
+        {% endif %}
+      </div>
+
       <!-- Status is always 'ongoing' for new tasks -->
       <input type="hidden" name="status" value="ongoing">
 
       <div class="modal-buttons">
         <button type="submit" class="btn btn-primary">Create</button>
-        <button type="button" class="btn btn-secondary" onclick="closeAddTaskModal()">Cancel</button>
+        <button type="button" class="btn btn-secondary" id="cancelAddTaskBtn">Cancel</button>
       </div>
     </form>
   </div>
 </div>
 {{ block.super }}
-<script>
-function openAddTaskModal() {
-  document.getElementById('addTaskModal').style.display = 'flex';
-}
-function closeAddTaskModal() {
-  document.getElementById('addTaskModal').style.display = 'none';
-  document.getElementById('addTaskForm').reset();
-  // Clear any existing error messages
-  clearFormErrors();
-}
-
-// Clear all form error messages
-function clearFormErrors() {
-  const errorElements = document.querySelectorAll('.form-error');
-  errorElements.forEach(element => element.remove());
-}
-
-// Display form errors in the modal
-function displayFormErrors(errors) {
-  clearFormErrors();
-  
-  Object.keys(errors).forEach(fieldName => {
-    const field = document.querySelector(`[name="${fieldName}"]`);
-    if (field) {
-      const errorDiv = document.createElement('div');
-      errorDiv.className = 'form-error';
-      errorDiv.textContent = errors[fieldName][0];
-      field.parentNode.appendChild(errorDiv);
-    }
-  });
-}
-
-// Create a new task row and add it to the table
-function addTaskToTable(task) {
-  const tbody = document.querySelector('.task-table tbody');
-  if (!tbody) return;
-  
-  // Create the new row HTML
-  const newRow = document.createElement('tr');
-  newRow.className = 'task-row';
-  newRow.id = `task-${task.id}`;
-  newRow.style.backgroundColor = task.status === 'completed' ? '#97F5E9' : '#F2F3DB';
-  
-  // Priority emoji mapping
-  const priorityEmoji = {
-    'high': '🔴',
-    'medium': '🟡',
-    'low': '🟢'
-  };
-  
-  newRow.innerHTML = `
-    <td class="completed-cell">
-      <form method="post" class="completion-form">
-        {% csrf_token %}
-        <input type="hidden" name="task_id" value="${task.id}">
-        <input type="hidden" name="action" value="toggle_completion">
-        <input type="checkbox" class="rounded-checkbox" name="is_completed" value="1" ${task.is_completed ? 'checked' : ''} aria-label="Toggle completed">
-      </form>
-    </td>
-    <td>
-      <div class="display-mode" id="display-${task.id}">
-        <strong>${task.title}</strong>
-      </div>
-    </td>
-    <td>
-      <div class="display-mode" id="display-desc-${task.id}">
-        ${task.description || '&ndash;'}
-      </div>
-    </td>
-    <td>
-      <div class="display-mode" id="display-date-${task.id}">
-        ${task.due_date}
-      </div>
-    </td>
-    <td>
-      <div class="display-mode" id="display-priority-${task.id}">
-        ${priorityEmoji[task.priority]} ${task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
-      </div>
-    </td>
-    <td>
-      <div class="display-mode" id="display-status-${task.id}">
-        ${task.status.charAt(0).toUpperCase() + task.status.slice(1)}
-      </div>
-    </td>
-    <td class="actions-cell">
-      <div class="display-mode" id="display-actions-${task.id}" style="display: flex; align-items: center; gap: 12px;">
-        <span class="action-icon edit-action" title="Edit"
-              onclick="openEditTaskModal(${task.id}, '${task.title.replace(/'/g, "\\'")}', '${(task.description || '').replace(/'/g, "\\'")}', '${task.due_date_local}', '${task.priority}')">✎</span>
-        <span class="action-icon delete-action" title="Delete" onclick="openDeleteModal(event, ${task.id}, '${task.title.replace(/'/g, "\\'")}', this)">🗑</span>
-      </div>
-    </td>
-  `;
-  
-  // Add the new row to the table
-  tbody.appendChild(newRow);
-  
-  // Attach AJAX handler to the new task's completion checkbox
-  const newCheckbox = newRow.querySelector('.completion-form input[type="checkbox"]');
-  if (newCheckbox) {
-    newCheckbox.addEventListener('change', handleCompletionToggle);
-  }
-  
-  // If there was a "No tasks available" message, remove it
-  const noTasksMessage = document.querySelector('p');
-  if (noTasksMessage && noTasksMessage.textContent === 'No tasks available.') {
-    noTasksMessage.remove();
-  }
-}
-
-// Handle Add Task form submission via AJAX
-function submitAddTaskForm(event) {
-  event.preventDefault();
-  
-  const form = event.target;
-  const formData = new FormData(form);
-  
-  // Get CSRF token
-  const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-  
-  // Show loading state (optional)
-  const submitButton = form.querySelector('button[type="submit"]');
-  const originalText = submitButton.textContent;
-  submitButton.textContent = 'Creating...';
-  submitButton.disabled = true;
-  
-  fetch(form.action, {
-    method: 'POST',
-    body: formData,
-    headers: {
-      'X-Requested-With': 'XMLHttpRequest',
-      'X-CSRFToken': csrfToken
-    }
-  })
-  .then(response => response.json())
-  .then(data => {
-    if (data.success) {
-      // Task created successfully
-      closeAddTaskModal();
-      addTaskToTable(data.task);
-    } else {
-      // Form validation errors
-      displayFormErrors(data.errors);
-    }
-  })
-  .catch(error => {
-    console.error('Error:', error);
-    // Show a generic error message
-    const errorDiv = document.createElement('div');
-    errorDiv.className = 'form-error';
-    errorDiv.textContent = 'An error occurred while creating the task. Please try again.';
-    form.appendChild(errorDiv);
-  })
-  .finally(() => {
-    // Restore button state
-    submitButton.textContent = originalText;
-    submitButton.disabled = false;
-  });
-}
-
-// Attach the AJAX form handler
-document.addEventListener('DOMContentLoaded', function() {
-  const addTaskForm = document.getElementById('addTaskForm');
-  if (addTaskForm) {
-    addTaskForm.addEventListener('submit', submitAddTaskForm);
-  }
-  
-  const editTaskForm = document.getElementById('editTaskForm');
-  if (editTaskForm) {
-    editTaskForm.addEventListener('submit', submitEditTaskForm);
-  }
-  
-  // Attach AJAX handlers to completion checkboxes
-  attachCompletionCheckboxHandlers();
-  
-  // Attach AJAX handlers to filter buttons
-  attachFilterButtonHandlers();
-  
-  {% if show_modal %}
-    openAddTaskModal();
-  {% else %}
-    document.getElementById('addTaskModal').style.display = 'none';
-  {% endif %}
-  
-  // Handle sort dropdown changes via AJAX - PREVENT DEFAULT BEHAVIOR
-  const sortDropdown = document.getElementById('sort-dropdown');
-  if (sortDropdown) {
-    // Remove any existing event listeners to prevent duplicates
-    sortDropdown.removeEventListener('change', handleSortDropdownChange);
-    
-    // Add the event listener with proper event prevention
-    sortDropdown.addEventListener('change', function(event) {
-      // CRITICAL: Prevent any default form submission or navigation
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-      
-      // Call the AJAX handler
-      handleSortDropdownChange(this.value);
-      
-      // Return false to ensure no default behavior
-      return false;
-    });
-  }
-});
-
-// Attach AJAX event handlers to all completion checkboxes
-function attachCompletionCheckboxHandlers() {
-  const checkboxes = document.querySelectorAll('.completion-form input[type="checkbox"]');
-  checkboxes.forEach(checkbox => {
-    checkbox.addEventListener('change', handleCompletionToggle);
-  });
-}
-
-// Handle completion checkbox toggle via AJAX
-function handleCompletionToggle(event) {
-  event.preventDefault(); // Prevent the default form submission
-  
-  const checkbox = event.target;
-  const form = checkbox.closest('.completion-form');
-  const taskId = form.querySelector('input[name="task_id"]').value;
-  const isCompleted = checkbox.checked;
-  
-  // Show visual feedback (optional - checkbox already shows state)
-  checkbox.disabled = true;
-  
-  // Prepare form data
-  const formData = new FormData();
-  formData.append('action', 'toggle_completion');
-  formData.append('task_id', taskId);
-  formData.append('is_completed', isCompleted ? '1' : '0');
-  
-  // Get CSRF token
-  const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-  
-  // Send AJAX request
-  fetch(window.location.href, {
-    method: 'POST',
-    body: formData,
-    headers: {
-      'X-Requested-With': 'XMLHttpRequest',
-      'X-CSRFToken': csrfToken
-    }
-  })
-  .then(response => response.json())
-  .then(data => {
-    if (data.success) {
-      // Update the task row visually
-      updateTaskRowCompletion(taskId, data.status, data.is_completed);
-    } else {
-      // Revert checkbox state on error
-      checkbox.checked = !isCompleted;
-      console.error('Failed to update task status:', data.error);
-      // Optionally show a user-friendly error message
-      showCompletionError(taskId, data.error || 'Failed to update task status');
-    }
-  })
-  .catch(error => {
-    console.error('Error updating task status:', error);
-    // Revert checkbox state on network error
-    checkbox.checked = !isCompleted;
-    showCompletionError(taskId, 'Network error. Please try again.');
-  })
-  .finally(() => {
-    // Re-enable the checkbox
-    checkbox.disabled = false;
-  });
-}
-
-// Update the task row visually after completion toggle
-function updateTaskRowCompletion(taskId, status, isCompleted) {
-  const taskRow = document.getElementById(`task-${taskId}`);
-  if (!taskRow) return;
-  
-  // Get the current active filter
-  const activeFilterButton = document.querySelector('.filter-btn.active');
-  const currentFilter = getCurrentFilterFromButton(activeFilterButton);
-  
-  // Update background color based on completion status
-  if (status === 'completed') {
-    taskRow.style.backgroundColor = '#97F5E9'; // Greenish for completed
-  } else {
-    taskRow.style.backgroundColor = '#F2F3DB'; // Light yellow for ongoing
-  }
-  
-  // Update status text if it exists
-  const statusCell = taskRow.querySelector('#display-status-' + taskId);
-  if (statusCell) {
-    statusCell.textContent = status.charAt(0).toUpperCase() + status.slice(1);
-  }
-  
-  // Update checkbox state (should already be correct, but ensure consistency)
-  const checkbox = taskRow.querySelector('input[name="is_completed"]');
-  if (checkbox) {
-    checkbox.checked = isCompleted;
-  }
-  
-  // Check if task should be removed from current filter view
-  if (currentFilter === 'ongoing' && status === 'completed') {
-    // Task was completed while viewing ongoing tasks - fade it out and remove
-    taskRow.classList.add('fade-out');
-    setTimeout(() => {
-      taskRow.remove();
-      
-      // Check if there are any remaining tasks in the table
-      const remainingTasks = document.querySelectorAll('.task-row');
-      if (remainingTasks.length === 0) {
-        // No tasks left, show the "No tasks available" message
-        const tableContainer = document.querySelector('.table-container');
-        if (tableContainer) {
-          const noTasksMessage = document.createElement('p');
-          noTasksMessage.textContent = 'No tasks available.';
-          tableContainer.appendChild(noTasksMessage);
-        }
-      }
-    }, 500); // Match the CSS transition duration
-  } else if (currentFilter === 'completed' && status === 'ongoing') {
-    // Task was uncompleted while viewing completed tasks - fade it out and remove
-    taskRow.classList.add('fade-out');
-    setTimeout(() => {
-      taskRow.remove();
-      
-      // Check if there are any remaining tasks in the table
-      const remainingTasks = document.querySelectorAll('.task-row');
-      if (remainingTasks.length === 0) {
-        // No tasks left, show the "No tasks available" message
-        const tableContainer = document.querySelector('.table-container');
-        if (tableContainer) {
-          const noTasksMessage = document.createElement('p');
-          noTasksMessage.textContent = 'No tasks available.';
-          tableContainer.appendChild(noTasksMessage);
-        }
-      }
-    }, 500); // Match the CSS transition duration
-  }
-  
-  // Update edit button onclick with new data (only if row still exists)
-  const editButton = taskRow.querySelector('.edit-action');
-  if (editButton) {
-    editButton.onclick = function() {
-      openEditTaskModal(taskId, taskRow.querySelector('#display-' + taskId).textContent.trim(), 
-                       taskRow.querySelector('#display-desc-' + taskId).textContent.trim(), 
-                       taskRow.querySelector('#display-date-' + taskId).textContent.trim(), 
-                       getPriorityFromDisplay(taskRow.querySelector('#display-priority-' + taskId).textContent.trim()));
-    };
-  }
-}
-
-// Helper function to get current filter from active button
-function getCurrentFilterFromButton(activeButton) {
-  if (!activeButton) return 'ongoing'; // Default to ongoing
-  
-  const href = activeButton.href;
-  if (href.includes('status=completed')) {
-    return 'completed';
-  } else if (href.includes('status=all')) {
-    return 'all';
-  } else {
-    return 'ongoing'; // Default or ongoing filter
-  }
-}
-
-// Helper function to extract priority from display text
-function getPriorityFromDisplay(priorityText) {
-  if (priorityText.includes('🔴')) return 'high';
-  if (priorityText.includes('🟡')) return 'medium';
-  if (priorityText.includes('🟢')) return 'low';
-  return 'medium'; // Default fallback
-}
-
-// Show error message for completion toggle (optional)
-function showCompletionError(taskId, message) {
-  // You could implement a toast notification or inline error message here
-  // For now, we'll just log to console and could add a visual indicator
-  console.error(`Task ${taskId}: ${message}`);
-  
-  // Optional: Add a temporary visual indicator on the row
-  const taskRow = document.getElementById(`task-${taskId}`);
-  if (taskRow) {
-    // Add a temporary error class or flash effect
-    taskRow.style.border = '2px solid #dc3545';
-    setTimeout(() => {
-      taskRow.style.border = '';
-    }, 2000);
-  }
-}
-
-// Attach AJAX event handlers to all filter buttons
-function attachFilterButtonHandlers() {
-  const filterButtons = document.querySelectorAll('.filter-btn');
-  filterButtons.forEach(button => {
-    button.addEventListener('click', handleFilterButtonClick);
-  });
-}
-
-// Handle filter button clicks via AJAX
-function handleFilterButtonClick(event) {
-  event.preventDefault(); // Prevent the default page reload
-  
-  const button = event.target;
-  const filterUrl = button.href;
-  
-  // Get current sort value
-  const currentSort = getCurrentSortValue();
-  
-  // Build the URL with both status filter and current sort
-  let finalUrl = new URL(filterUrl);
-  if (currentSort && currentSort !== 'due_date') {
-    finalUrl.searchParams.set('sort', currentSort);
-  }
-  
-  // Show loading state on the button
-  const originalText = button.textContent;
-  button.textContent = 'Loading...';
-  button.disabled = true;
-  
-  // Update active state visually
-  updateFilterButtonStates(button);
-  
-  // Send AJAX request to get filtered tasks
-  fetch(finalUrl.toString(), {
-    method: 'GET',
-    headers: {
-      'X-Requested-With': 'XMLHttpRequest'
-    }
-  })
-  .then(response => response.json())
-  .then(data => {
-    if (data.success) {
-      // Update the task table with filtered results
-      updateTaskTableWithFilteredData(data.tasks, data.has_tasks);
-      // Update URL without page reload
-      updateBrowserUrl(finalUrl.toString());
-    } else {
-      console.error('Failed to load filtered tasks:', data.error);
-      showFilterError('Failed to load filtered tasks. Please try again.');
-    }
-  })
-  .catch(error => {
-    console.error('Error loading filtered tasks:', error);
-    showFilterError('Network error. Please check your connection and try again.');
-  })
-  .finally(() => {
-    // Restore button state
-    button.textContent = originalText;
-    button.disabled = false;
-  });
-}
-
-// Helper function to get current sort value
-function getCurrentSortValue() {
-  const sortDropdown = document.getElementById('sort-dropdown');
-  if (sortDropdown) {
-    return sortDropdown.value;
-  }
-  return 'due_date'; // Default sort
-}
-
-// Update the visual state of filter buttons (active/inactive)
-function updateFilterButtonStates(activeButton) {
-  const allFilterButtons = document.querySelectorAll('.filter-btn');
-  allFilterButtons.forEach(button => {
-    button.classList.remove('active');
-  });
-  activeButton.classList.add('active');
-}
-
-// Update the task table with filtered data
-function updateTaskTableWithFilteredData(tasks, hasTasks) {
-  const tbody = document.querySelector('.task-table tbody');
-  const tableContainer = document.querySelector('.table-container');
-  
-  if (!tbody || !tableContainer) return;
-  
-  // Clear existing tasks
-  tbody.innerHTML = '';
-  
-  // Remove any existing "No tasks available" message
-  const existingNoTasksMessage = tableContainer.querySelector('p');
-  if (existingNoTasksMessage) {
-    existingNoTasksMessage.remove();
-  }
-  
-  if (hasTasks && tasks.length > 0) {
-    // Add filtered tasks to the table
-    tasks.forEach(task => {
-      const taskRow = createTaskRow(task);
-      tbody.appendChild(taskRow);
-    });
-    
-    // Reattach event handlers to new task elements
-    attachCompletionCheckboxHandlers();
-  } else {
-    // Show "No tasks available" message
-    const noTasksMessage = document.createElement('p');
-    noTasksMessage.textContent = 'No tasks available.';
-    tableContainer.appendChild(noTasksMessage);
-  }
-}
-
-// Create a task row element from task data
-function createTaskRow(task) {
-  const row = document.createElement('tr');
-  row.className = 'task-row';
-  row.id = `task-${task.id}`;
-  row.style.backgroundColor = task.status === 'completed' ? '#97F5E9' : '#F2F3DB';
-  
-  // Priority emoji mapping
-  const priorityEmoji = {
-    'high': '🔴',
-    'medium': '🟡',
-    'low': '🟢'
-  };
-  
-  row.innerHTML = `
-    <td class="completed-cell">
-      <form method="post" class="completion-form">
-        {% csrf_token %}
-        <input type="hidden" name="task_id" value="${task.id}">
-        <input type="hidden" name="action" value="toggle_completion">
-        <input type="checkbox" class="rounded-checkbox" name="is_completed" value="1" ${task.is_completed ? 'checked' : ''} aria-label="Toggle completed">
-      </form>
-    </td>
-    <td>
-      <div class="display-mode" id="display-${task.id}">
-        <strong>${task.title}</strong>
-      </div>
-    </td>
-    <td>
-      <div class="display-mode" id="display-desc-${task.id}">
-        ${task.description || '&ndash;'}
-      </div>
-    </td>
-    <td>
-      <div class="display-mode" id="display-date-${task.id}">
-        ${task.due_date}
-      </div>
-    </td>
-    <td>
-      <div class="display-mode" id="display-priority-${task.id}">
-        ${priorityEmoji[task.priority]} ${task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
-      </div>
-    </td>
-    <td>
-      <div class="display-mode" id="display-status-${task.id}">
-        ${task.status.charAt(0).toUpperCase() + task.status.slice(1)}
-      </div>
-    </td>
-    <td class="actions-cell">
-      <div class="display-mode" id="display-actions-${task.id}" style="display: flex; align-items: center; gap: 12px;">
-        <span class="action-icon edit-action" title="Edit"
-              onclick="openEditTaskModal(${task.id}, '${task.title.replace(/'/g, "\\'")}', '${(task.description || '').replace(/'/g, "\\'")}', '${task.due_date_local}', '${task.priority}')">✎</span>
-        <span class="action-icon delete-action" title="Delete" onclick="openDeleteModal(event, ${task.id}, '${task.title.replace(/'/g, "\\'")}', this)">🗑</span>
-      </div>
-    </td>
-  `;
-  
-  return row;
-}
-
-// Update browser URL without page reload
-function updateBrowserUrl(url) {
-  window.history.pushState({}, '', url);
-}
-
-// Show error message for filter operations
-function showFilterError(message) {
-  console.error('Filter error:', message);
-  // You could implement a toast notification or inline error message here
-  // For now, we'll just log to console
-}
-</script>
-<style>
-.form-error {
-  color: #dc3545;
-  font-size: 13px;
-  margin-bottom: 6px;
-}
-
-/* Filter controls styling */
-.filter-controls {
-  margin-bottom: 16px;
-}
-
-.filter-controls label {
-  display: block;
-  font-weight: 500;
-  margin-bottom: 8px;
-  color: #333;
-}
-
-.filter-buttons {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.filter-btn {
-  display: inline-block;
-  padding: 8px 16px;
-  background-color: #f8f9fa;
-  border: 1px solid #dee2e6;
-  border-radius: 6px;
-  color: #495057;
-  text-decoration: none;
-  font-size: 14px;
-  font-weight: 500;
-  transition: all 0.2s ease;
-  cursor: pointer;
-}
-
-.filter-btn:hover {
-  background-color: #e9ecef;
-  border-color: #adb5bd;
-  color: #212529;
-  text-decoration: none;
-}
-
-.filter-btn.active {
-  background-color: #007bff;
-  border-color: #007bff;
-  color: white;
-}
-
-.filter-btn.active:hover {
-  background-color: #0056b3;
-  border-color: #0056b3;
-  color: white;
-}
-
-/* Adjust page controls layout */
-.page-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
-@media (min-width: 768px) {
-  .page-controls {
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: flex-end;
-  }
-  
-  .filter-controls {
-    margin-bottom: 0;
-  }
-}
-
-/* Fade-out animation for completed tasks */
-.fade-out {
-  opacity: 0;
-  transition: opacity 0.5s ease-out;
-}
-</style>
 <div id="deleteModal" class="modal">
   <div class="modal-content">
     <p>Are you sure you want to delete this task?</p>
     <div id="deleteTaskTitle" style="font-weight: bold; margin-bottom: 16px;"></div>
     <input type="hidden" id="deleteTaskId" value="">
     <button id="confirmDeleteBtn" class="btn btn-danger">Delete</button>
-    <button id="cancelDeleteBtn" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+    <button id="cancelDeleteBtn" class="btn btn-secondary">Cancel</button>
+  </div>
+</div>
+
+<!-- Share List Modal -->
+<div id="shareTasklistModal" class="modal">
+  <div class="modal-content">
+    <form method="post" action="{% url 'share_tasklist' %}" id="shareTasklistForm">
+      {% csrf_token %}
+      <h2 class="modal-title">Share Task List</h2>
+      <p class="modal-description">Share "{{ current_tasklist.name }}" with another user by entering their username below.</p>
+      
+      <div class="modal-field">
+        <label for="username">Username</label>
+        <input type="text" name="username" id="username" placeholder="Enter username" required>
+        <div id="share-error-message" class="form-error" style="display: none;"></div>
+      </div>
+      
+      <div class="modal-buttons">
+        <button type="submit" class="btn btn-primary">Share</button>
+        <button type="button" class="btn btn-secondary" id="cancelShareTasklistBtn">Cancel</button>
+      </div>
+    </form>
   </div>
 </div>
 <div id="editTaskModal" class="modal">
@@ -869,323 +276,28 @@ function showFilterError(message) {
         <label for="edit-priority">Priority</label>
         <select name="priority" id="edit-priority" required>
           <option value="" disabled>Select priority</option>
-          <option value="high">High</option>
-          <option value="medium">Medium</option>
-          <option value="low">Low</option>
+          <option value="high">🔴 High</option>
+          <option value="medium">🟡 Medium</option>
+          <option value="low">🟢 Low</option>
+        </select>
+      </div>
+      <div class="modal-field">
+        <label for="edit-tasklist">Task List</label>
+        <select name="tasklist" id="edit-tasklist" required>
+          <option value="" disabled>Select a list</option>
+          {% for tasklist in form.tasklist.field.queryset %}
+            <option value="{{ tasklist.id }}">{{ tasklist.name }}</option>
+          {% endfor %}
         </select>
       </div>
       <div class="modal-buttons">
         <button type="submit" class="btn btn-primary">Save</button>
-        <button type="button" class="btn btn-secondary" onclick="closeEditTaskModal()">Cancel</button>
+        <button type="button" class="btn btn-secondary" id="cancelEditTaskBtn">Cancel</button>
       </div>
     </form>
   </div>
 </div>
 
-<script>
-function openEditTaskModal(id, title, description, due_date, priority) {
-  document.getElementById('edit-task-id').value = id;
-  document.getElementById('edit-title').value = title;
-  document.getElementById('edit-description').value = description;
-  document.getElementById('edit-due-date').value = due_date;
-  document.getElementById('edit-priority').value = priority;
-  
-  // Set the data-task-id attribute on the form
-  document.getElementById('editTaskForm').setAttribute('data-task-id', id);
-  
-  document.getElementById('editTaskModal').style.display = 'flex';
-}
 
-function closeEditTaskModal() {
-  document.getElementById('editTaskModal').style.display = 'none';
-  document.getElementById('editTaskForm').reset();
-  // Clear any existing error messages
-  clearEditFormErrors();
-}
-
-// Clear all edit form error messages
-function clearEditFormErrors() {
-  const errorElements = document.querySelectorAll('#editTaskModal .form-error');
-  errorElements.forEach(element => element.remove());
-}
-
-// Display edit form errors in the modal
-function displayEditFormErrors(errors) {
-  clearEditFormErrors();
-  
-  Object.keys(errors).forEach(fieldName => {
-    const field = document.querySelector(`#editTaskModal [name="${fieldName}"]`);
-    if (field) {
-      const errorDiv = document.createElement('div');
-      errorDiv.className = 'form-error';
-      errorDiv.textContent = errors[fieldName][0];
-      field.parentNode.appendChild(errorDiv);
-    }
-  });
-}
-
-// Update a task row in the table with new data
-function updateTaskInTable(task) {
-  const taskRow = document.getElementById(`task-${task.id}`);
-  if (!taskRow) return;
-  
-  // Get the current active filter
-  const activeFilterButton = document.querySelector('.filter-btn.active');
-  const currentFilter = getCurrentFilterFromButton(activeFilterButton);
-  
-  // Priority emoji mapping
-  const priorityEmoji = {
-    'high': '🔴',
-    'medium': '🟡',
-    'low': '🟢'
-  };
-  
-  // Update the task row content
-  taskRow.style.backgroundColor = task.status === 'completed' ? '#97F5E9' : '#F2F3DB';
-  
-  // Update title
-  const titleCell = taskRow.querySelector('#display-' + task.id);
-  if (titleCell) {
-    titleCell.innerHTML = `<strong>${task.title}</strong>`;
-  }
-  
-  // Update description
-  const descCell = taskRow.querySelector('#display-desc-' + task.id);
-  if (descCell) {
-    descCell.innerHTML = task.description || '&ndash;';
-  }
-  
-  // Update due date
-  const dateCell = taskRow.querySelector('#display-date-' + task.id);
-  if (dateCell) {
-    dateCell.textContent = task.due_date;
-  }
-  
-  // Update priority
-  const priorityCell = taskRow.querySelector('#display-priority-' + task.id);
-  if (priorityCell) {
-    priorityCell.innerHTML = `${priorityEmoji[task.priority]} ${task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}`;
-  }
-  
-  // Update status
-  const statusCell = taskRow.querySelector('#display-status-' + task.id);
-  if (statusCell) {
-    statusCell.textContent = task.status.charAt(0).toUpperCase() + task.status.slice(1);
-  }
-  
-  // Update completion checkbox
-  const checkbox = taskRow.querySelector('input[name="is_completed"]');
-  if (checkbox) {
-    checkbox.checked = task.is_completed;
-  }
-  
-  // Check if task should be removed from current filter view after edit
-  if (currentFilter === 'ongoing' && task.status === 'completed') {
-    // Task was edited to completed while viewing ongoing tasks - fade it out and remove
-    taskRow.classList.add('fade-out');
-    setTimeout(() => {
-      taskRow.remove();
-      
-      // Check if there are any remaining tasks in the table
-      const remainingTasks = document.querySelectorAll('.task-row');
-      if (remainingTasks.length === 0) {
-        // No tasks left, show the "No tasks available" message
-        const tableContainer = document.querySelector('.table-container');
-        if (tableContainer) {
-          const noTasksMessage = document.createElement('p');
-          noTasksMessage.textContent = 'No tasks available.';
-          tableContainer.appendChild(noTasksMessage);
-        }
-      }
-    }, 500); // Match the CSS transition duration
-  } else if (currentFilter === 'completed' && task.status === 'ongoing') {
-    // Task was edited to ongoing while viewing completed tasks - fade it out and remove
-    taskRow.classList.add('fade-out');
-    setTimeout(() => {
-      taskRow.remove();
-      
-      // Check if there are any remaining tasks in the table
-      const remainingTasks = document.querySelectorAll('.task-row');
-      if (remainingTasks.length === 0) {
-        // No tasks left, show the "No tasks available" message
-        const tableContainer = document.querySelector('.table-container');
-        if (tableContainer) {
-          const noTasksMessage = document.createElement('p');
-          noTasksMessage.textContent = 'No tasks available.';
-          tableContainer.appendChild(noTasksMessage);
-        }
-      }
-    }, 500); // Match the CSS transition duration
-  } else {
-    // Update edit button onclick with new data (only if row still exists and won't be removed)
-    const editButton = taskRow.querySelector('.edit-action');
-    if (editButton) {
-      editButton.onclick = function() {
-        openEditTaskModal(task.id, task.title, task.description, task.due_date_local, task.priority);
-      };
-    }
-  }
-}
-
-// Handle Edit Task form submission via AJAX
-function submitEditTaskForm(event) {
-  event.preventDefault();
-  
-  const form = event.target;
-  const formData = new FormData(form);
-  
-  // Get CSRF token
-  const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-  
-  // Show loading state
-  const submitButton = form.querySelector('button[type="submit"]');
-  const originalText = submitButton.textContent;
-  submitButton.textContent = 'Saving...';
-  submitButton.disabled = true;
-  
-  fetch(form.action, {
-    method: 'POST',
-    body: formData,
-    headers: {
-      'X-Requested-With': 'XMLHttpRequest',
-      'X-CSRFToken': csrfToken
-    }
-  })
-  .then(response => response.json())
-  .then(data => {
-    if (data.success) {
-      // Task updated successfully
-      closeEditTaskModal();
-      updateTaskInTable(data.task);
-    } else {
-      // Form validation errors
-      displayEditFormErrors(data.errors);
-    }
-  })
-  .catch(error => {
-    console.error('Error:', error);
-    // Show a generic error message
-    const errorDiv = document.createElement('div');
-    errorDiv.className = 'form-error';
-    errorDiv.textContent = 'An error occurred while updating the task. Please try again.';
-    form.appendChild(errorDiv);
-  })
-  .finally(() => {
-    // Restore button state
-    submitButton.textContent = originalText;
-    submitButton.disabled = false;
-  });
-}
-
-// Attach the AJAX form handler
-document.addEventListener('DOMContentLoaded', function() {
-  const editTaskForm = document.getElementById('editTaskForm');
-  if (editTaskForm) {
-    editTaskForm.addEventListener('submit', submitEditTaskForm);
-  }
-  
-  // REMOVED: Duplicate sort dropdown handler - this was causing the page reload issue
-  // The sort dropdown is now handled in the first DOMContentLoaded event listener above
-});
-
-// Handle sort dropdown change via AJAX - ENHANCED VERSION
-function handleSortDropdownChange(sortValue) {
-  // Get current status filter
-  const currentStatusFilter = getCurrentStatusFilter();
-  
-  // Build the URL with current status filter and new sort value
-  let sortUrl = window.location.pathname;
-  const params = new URLSearchParams();
-  
-  if (currentStatusFilter && currentStatusFilter !== 'ongoing') {
-    // Add status filter if it's not the default 'ongoing'
-    params.append('status', currentStatusFilter);
-  }
-  
-  if (sortValue && sortValue !== 'due_date') {
-    // Add sort parameter if it's not the default 'due_date'
-    params.append('sort', sortValue);
-  }
-  
-  if (params.toString()) {
-    sortUrl += '?' + params.toString();
-  }
-  
-  // Show loading state on the dropdown
-  const sortDropdown = document.getElementById('sort-dropdown');
-  if (!sortDropdown) {
-    console.error('Sort dropdown not found');
-    return;
-  }
-  
-  // Disable dropdown during fetch to prevent multiple requests
-  sortDropdown.disabled = true;
-  
-  // Store original value in case we need to revert on error
-  const originalValue = sortDropdown.value;
-  
-  // Send AJAX request to get sorted tasks
-  fetch(sortUrl, {
-    method: 'GET',
-    headers: {
-      'X-Requested-With': 'XMLHttpRequest'
-    }
-  })
-  .then(response => {
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return response.json();
-  })
-  .then(data => {
-    if (data.success) {
-      // Update the task table with sorted results
-      updateTaskTableWithFilteredData(data.tasks, data.has_tasks);
-      
-      // Update URL without page reload using pushState
-      updateBrowserUrl(sortUrl);
-    } else {
-      console.error('Failed to load sorted tasks:', data.error);
-      showSortError('Failed to load sorted tasks. Please try again.');
-      
-      // Revert dropdown to previous value on error
-      sortDropdown.value = originalValue;
-    }
-  })
-  .catch(error => {
-    console.error('Error loading sorted tasks:', error);
-    showSortError('Network error. Please check your connection and try again.');
-    
-    // Revert dropdown to previous value on error
-    sortDropdown.value = originalValue;
-  })
-  .finally(() => {
-    // Re-enable dropdown after request completes
-    sortDropdown.disabled = false;
-  });
-}
-
-// Helper function to get current status filter
-function getCurrentStatusFilter() {
-  const activeFilterButton = document.querySelector('.filter-btn.active');
-  if (!activeFilterButton) return 'ongoing'; // Default to ongoing
-  
-  const href = activeFilterButton.href;
-  if (href.includes('status=completed')) {
-    return 'completed';
-  } else if (href.includes('status=all')) {
-    return 'all';
-  } else {
-    return 'ongoing'; // Default or ongoing filter
-  }
-}
-
-// Show error message for sort operations
-function showSortError(message) {
-  console.error('Sort error:', message);
-  // You could implement a toast notification or inline error message here
-  // For now, we'll just log to console
-}
-</script>
 {% endblock %}
-<script src="{% static 'js/delete_modal.js' %}"></script> 
+ 

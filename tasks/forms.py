@@ -2,14 +2,46 @@ from django import forms
 from django.forms import DateTimeInput
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
-from .models import Task
+from .models import Task, TaskList
 
 class TaskForm(forms.ModelForm):
+    tasklist = forms.ModelChoiceField(
+        queryset=TaskList.objects.none(),
+        empty_label="Select a list",
+        widget=forms.Select(attrs={
+            'class': 'form-control',
+            'required': True
+        })
+    )
+    
     class Meta:
         model = Task
-        fields = ['title', 'description', 'due_date', 'priority', 'status']
+        fields = ['title', 'description', 'due_date', 'priority', 'status', 'tasklist']
         widgets = {
             'due_date': DateTimeInput(attrs={'type': 'datetime-local'}),
+        }
+    
+    def __init__(self, user=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if user:
+            self.fields['tasklist'].queryset = TaskList.objects.filter(user=user)
+        
+        # Style all fields with Bootstrap classes
+        for field_name, field in self.fields.items():
+            if field_name not in ['due_date', 'tasklist']:  # these are already styled
+                field.widget.attrs.update({
+                    'class': 'form-control'
+                })
+
+class TaskListForm(forms.ModelForm):
+    class Meta:
+        model = TaskList
+        fields = ['name']
+        widgets = {
+            'name': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'My Awesome List'
+            })
         }
 
 class UserRegistrationForm(UserCreationForm):

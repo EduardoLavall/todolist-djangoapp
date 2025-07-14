@@ -1,0 +1,13 @@
+{% extends 'tasks/base.html' %}
+{% block content %}
+  <h2>Application Log</h2>
+  {% if no_log %}
+    <div class="alert alert-info">No logs available yet.</div>
+  {% else %}
+    {% if truncated %}
+      <div class="alert alert-warning">Showing last 500 lines due to large file size. <a href="{% url 'download_log_file' %}">Download full log</a></div>
+    {% endif %}
+    <pre style="background:#222;color:#eee;padding:1em;overflow-x:auto;max-height:600px;">{{ log_content|escape }}</pre>
+    <a class="btn btn-primary mt-2" href="{% url 'download_log_file' %}">Download Log File</a>
+  {% endif %}
+{% endblock %} 
